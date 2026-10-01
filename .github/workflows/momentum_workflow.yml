@@ -2,7 +2,10 @@ name: Automated Momentum Trading Pipeline
 
 on:
   schedule:
-    # Runs every 15 minutes Monday-Friday during market hours (UTC)
+    # 1. EOD Screener & Database Generator runs daily at 9:00 PM IST (15:30 UTC) Monday-Friday
+    - cron: '30 15 * * 1-5'
+    
+    # 2. Intraday Monitor runs every 15 minutes during market hours (9:15 AM - 3:30 PM IST)
     - cron: '*/15 3-10 * * 1-5'
 
   workflow_dispatch: # Allows manual trigger from GitHub UI
