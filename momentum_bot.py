@@ -12,7 +12,7 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 def init_database():
-    """Initializes SQLite database to store pre-market cached levels safely."""
+    """Initializes SQLite database to store EOD/pre-market cached levels safely."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute('''
@@ -43,7 +43,7 @@ def send_telegram_alert(message):
         print(f"❌ Connection error sending Telegram alert: {e}")
 
 # =========================================================================
-# MODE 1: PRE-MARKET SCREENER & CACHER (Runs once daily)
+# MODE 1: EOD / PRE-MARKET SCREENER & CACHER (Runs daily at 9:00 PM IST)
 # =========================================================================
 def run_premarket(universe):
     init_database()
@@ -51,9 +51,9 @@ def run_premarket(universe):
     cursor = conn.cursor()
     
     today_str = datetime.now().strftime("%Y-%m-%d")
-    print(f"🔍 Running Pre-Market Screener for {today_str}...")
+    print(f"🔍 Running EOD Screener & Database Generator for {today_str}...")
     
-    # Clear previous cache to ensure fresh daily setups
+    # Clear previous cache to ensure fresh setups for the next session
     cursor.execute("DELETE FROM premarket_watchlist")
     qualified_list = []
     
@@ -98,12 +98,12 @@ def run_premarket(universe):
     conn.close()
     
     if qualified_list:
-        summary_msg = f"🌅 *Pre-Market Watchlist Ready ({today_str})*\n\n" + "\n".join(qualified_list)
+        summary_msg = f"🌙 *EOD Watchlist Generated ({today_str})*\n\n" + "\n".join(qualified_list)
     else:
-        summary_msg = f"🌅 *Pre-Market Watchlist ({today_str})*\nNo stocks met strict momentum criteria today. Sit tight in cash."
+        summary_msg = f"🌙 *EOD Watchlist ({today_str})*\nNo stocks met strict momentum criteria today. Sit tight in cash."
         
     send_telegram_alert(summary_msg)
-    print("Pre-market screening complete. Cache updated successfully.")
+    print("EOD screening complete. Database cache updated and committed successfully.")
 
 # =========================================================================
 # MODE 2: 15-MINUTE INTRADAY MONITOR (Runs every 15 mins during market hours)
@@ -120,7 +120,7 @@ def run_monitor():
         conn.close()
     
     if watchlist_df.empty:
-        print("⚠️ Pre-market cache is empty. No stocks to monitor.")
+        print("⚠️ Watchlist cache is empty. No stocks to monitor.")
         return
 
     print(f"⚡ Checking {len(watchlist_df)} cached stocks on 15m live data...")
@@ -154,7 +154,7 @@ def run_monitor():
             print(f"⏳ {ticker}: Monitoring... (Current High: INR {latest_high} | Trigger: INR {trigger_price})")
 
 # =========================================================================
-# SMART ENTRY POINT (Auto-detects mode based on IST time or CLI argument)
+# SMART ENTRY POINT (Auto-detects mode based on 9 PM IST window)
 # =========================================================================
 if __name__ == "__main__":
     stock_universe = ["CUPID.NS", "SCHNEIDER.NS", "MAZDOCK.NS", "COCHINSHIP.NS", "HAL.NS", "BEL.NS", "TITAN.NS"]
@@ -170,8 +170,8 @@ if __name__ == "__main__":
         
         print(f"Current IST Time: {now_ist.strftime('%Y-%m-%d %H:%M:%S')}")
         
-        # Pre-market window: Run between 8:40 AM and 9:00 AM IST
-        if current_hour == 8 and 40 <= current_minute <= 59:
+        # EOD generation window: Run between 9:00 PM and 9:30 PM IST
+        if current_hour == 21 and 0 <= current_minute <= 30:
             mode = "premarket"
         else:
             mode = "monitor"
