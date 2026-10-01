@@ -8,14 +8,14 @@ on:
     # 2. Intraday Monitor runs every 15 minutes Monday-Friday between 3:45 AM - 10:00 AM UTC (9:15 AM - 3:30 PM IST)
     - cron: '*/15 3-10 * * 1-5'
 
-  workflow_dispatch: # Allows manual trigger from the GitHub Actions UI
+  workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
     
     permissions:
-      contents: write # Required to automatically commit the SQLite cache database back to the repo
+      contents: write
 
     steps:
       - name: Checkout Repository
@@ -35,8 +35,11 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          CURRENT_HOUR=$(date -u +%H)
-          CURRENT_MIN=$(date -u +%M)
+          # Use 10# to force base-10 arithmetic and avoid leading zero octal errors
+          CURRENT_HOUR=\(((10#\)(date -u +%H)))
+          CURRENT_MIN=\(((10#\)(date -u +%M)))
+          
+          echo "Current UTC Time: Hour \(CURRENT_HOUR, Minute\)CURRENT_MIN"
           
           # If time is around 3:15 UTC, run pre-market; otherwise run 15m monitor
           if [ "\(CURRENT_HOUR" -eq 3 ] && [ "\)CURRENT_MIN" -ge 15 ] && [ "$CURRENT_MIN" -le 30 ]; then
