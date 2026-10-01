@@ -8,14 +8,14 @@ on:
     # 2. Intraday Monitor runs every 15 minutes Monday-Friday between 3:45 AM - 10:00 AM UTC (9:15 AM - 3:30 PM IST)
     - cron: '*/15 3-10 * * 1-5'
 
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+  workflow_dispatch: # Allows manual trigger from the GitHub Actions UI
 
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
     
     permissions:
-      contents: write # Required to commit the SQLite cache database back to the repo
+      contents: write # Required to automatically commit the SQLite cache database back to the repo
 
     steps:
       - name: Checkout Repository
@@ -25,7 +25,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          # Fixed: Removed cache: 'pip' to prevent requirements.txt errors
 
       - name: Install Dependencies
         run: |
