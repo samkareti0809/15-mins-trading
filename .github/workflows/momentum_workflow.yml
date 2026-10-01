@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     
     permissions:
-      contents: write # Required to commit SQLite cache back to repo
+      contents: write # Required to commit the SQLite cache database back to the repo
 
     steps:
       - name: Checkout Repository
@@ -25,7 +25,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pip'
+          # Fixed: Removed cache: 'pip' to prevent requirements.txt errors
 
       - name: Install Dependencies
         run: |
@@ -36,11 +36,10 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # Determine if triggered by pre-market cron or intraday cron/manual
           CURRENT_HOUR=$(date -u +%H)
           CURRENT_MIN=$(date -u +%M)
           
-          # If time is around 3:15 UTC, run premarket; otherwise run monitor
+          # If time is around 3:15 UTC, run pre-market; otherwise run 15m monitor
           if [ "\(CURRENT_HOUR" -eq 3 ] && [ "\)CURRENT_MIN" -ge 15 ] && [ "$CURRENT_MIN" -le 30 ]; then
             echo "Running Pre-Market Screener..."
             python momentum_bot.py premarket
