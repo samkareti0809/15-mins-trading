@@ -1,21 +1,15 @@
-# =========================================================================
-# COMPLETE MOMENTUM TRADING SYSTEM (Colab / Notebook Ready)
-# =========================================================================
-
-# Run this installation command in a separate cell if needed:
-# !pip install yfinance pandas requests -q
-
+import sys
+import os
 import sqlite3
 import requests
 import pandas as pd
 import yfinance as yf
 from datetime import datetime
-from IPython.display import display
 
 # --- CONFIGURATION ---
 DB_NAME = "momentum_cache.db"
-TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"  # Replace with your Telegram Bot Token (or leave for console simulation)
-TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE"      # Replace with your Telegram Chat ID
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 def init_database():
     """Initializes SQLite database to store pre-market cached levels."""
@@ -34,8 +28,8 @@ def init_database():
     conn.close()
 
 def send_telegram_alert(message):
-    """Sends instant push notifications to Telegram or simulates them in the console."""
-    if "YOUR_BOT_TOKEN" in TELEGRAM_BOT_TOKEN:
+    """Sends instant push notifications to Telegram or simulates them in console."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print(f"\n[Telegram Simulation Alert]:\n{message}\n")
         return
     
@@ -49,9 +43,9 @@ def send_telegram_alert(message):
         print(f"❌ Connection error sending Telegram alert: {e}")
 
 # =========================================================================
-# STEP 1: RUN PRE-MARKET PREPARATION & CACHING
+# MODE 1: PRE-MARKET SCREENER & CACHER (Run once daily before market open)
 # =========================================================================
-def run_premarket_preparation(universe):
+def run_premarket(universe):
     init_database()
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -59,7 +53,7 @@ def run_premarket_preparation(universe):
     today_str = datetime.now().strftime("%Y-%m-%d")
     print(f"🔍 Running Pre-Market Screener for {today_str}...")
     
-    # Clear previous day's cache to keep data fresh
+    # Clear previous cache to ensure fresh daily setups
     cursor.execute("DELETE FROM premarket_watchlist")
     qualified_list = []
     
@@ -98,7 +92,7 @@ def run_premarket_preparation(universe):
                 VALUES (?, ?, ?, ?, ?)
             ''', (ticker, trigger, sl, tp, today_str))
             
-            qualified_list.append(f"• *{ticker}* | Trigger: ₹{trigger} | SL: ₹{sl}")
+            qualified_list.append(f"• *{ticker}* | Trigger: INR {trigger} | SL: INR {sl}")
 
     conn.commit()
     conn.close()
@@ -109,44 +103,32 @@ def run_premarket_preparation(universe):
         summary_msg = f"🌅 *Pre-Market Watchlist ({today_str})*\nNo stocks met strict momentum criteria today. Sit tight in cash."
         
     send_telegram_alert(summary_msg)
-    print("Pre-market preparation complete. Database cached successfully.")
+    print("Pre-market screening complete. Cache updated successfully.")
 
 # =========================================================================
-# STEP 2: VIEW CURRENT WATCHLIST FROM DATABASE
+# MODE 2: 15-MINUTE INTRADAY MONITOR (Run every 15 mins during market hours)
 # =========================================================================
-def view_watchlist():
+def run_monitor():
     conn = sqlite3.connect(DB_NAME)
     try:
-        df = pd.read_sql_query("SELECT * FROM premarket_watchlist", conn)
-        if df.empty:
-            print("⚠️ Watchlist database is empty. Run pre-market preparation first.")
-        else:
-            print("📋 Current Cached Watchlist:")
-            display(df)
+        watchlist_df = pd.read_sql_query("SELECT * FROM premarket_watchlist", conn)
     except Exception as e:
-        print(f"Database error: {e}")
+        print(f"⚠️ Database error or missing table: {e}")
+        watchlist_df = pd.DataFrame()
     finally:
         conn.close()
-
-# =========================================================================
-# STEP 3: RUN 15-MINUTE LIGHTNING INTRADAY MONITOR
-# =========================================================================
-def run_15min_intraday_monitor():
-    conn = sqlite3.connect(DB_NAME)
-    watchlist_df = pd.read_sql_query("SELECT * FROM premarket_watchlist", conn)
-    conn.close()
     
     if watchlist_df.empty:
-        print("⚠️ Pre-market cache is empty. Run pre-market preparation first.")
+        print("⚠️ Pre-market cache is empty. No stocks to monitor.")
         return
 
-    print(f"⚡ Running 15-minute check across {len(watchlist_df)} cached stocks...")
+    print(f"⚡ Checking {len(watchlist_df)} cached stocks on 15m live data...")
     
     for _, row in watchlist_df.iterrows():
         ticker = row['ticker']
         trigger_price = row['trigger_price']
         
-        # Fast intraday check: Fetch only today's 15m candles
+        # Fast lightweight check: fetch only today's 15m intraday data
         df = yf.download(ticker, interval="15m", period="1d", auto_adjust=True, progress=False)
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
@@ -157,31 +139,31 @@ def run_15min_intraday_monitor():
         latest_close = df['Close'].iloc[-1]
         latest_high = df['High'].iloc[-1]
         
-        # Instant condition check against cached trigger
+        # Check if latest candle breached the pre-market trigger level
         if latest_high >= trigger_price:
             alert_msg = (
                 f"🚨 *15M BREAKOUT TRIGGERED!*\n\n"
                 f"📈 *Stock:* `{ticker}`\n"
-                f"⚡ *Trigger Level:* ₹{trigger_price}\n"
-                f"🔴 *Stop-Loss:* ₹{row['stop_loss']}\n"
-                f"🎯 *Target:* ₹{row['target_price']}\n"
-                f"📊 *Current Price:* ₹{latest_close:.2f}"
+                f"⚡ *Trigger Level:* INR {trigger_price}\n"
+                f"🔴 *Stop-Loss:* INR {row['stop_loss']}\n"
+                f"🎯 *Target:* INR {row['target_price']}\n"
+                f"📊 *Current Price:* INR {latest_close:.2f}"
             )
             send_telegram_alert(alert_msg)
-            print(f"✅ Alert triggered for {ticker}!")
+            print(f"✅ Alert sent for {ticker}!")
         else:
-            print(f"⏳ {ticker}: Monitoring... (Current High: ₹{latest_high} | Trigger: ₹{trigger_price})")
+            print(f"⏳ {ticker}: Monitoring... (Current High: INR {latest_high} | Trigger: INR {trigger_price})")
 
 # =========================================================================
-# EXECUTION CONTROLS (Run these as needed in separate cells)
+# CLI ENTRY POINT (Triggered by GitHub Actions workflow arguments)
 # =========================================================================
-stock_universe = ["CUPID.NS", "SCHNEIDER.NS", "MAZDOCK.NS", "COCHINSHIP.NS", "HAL.NS", "BEL.NS", "TITAN.NS"]
-
-# 1. Run Pre-Market Preparation (Morning Routine)
-# run_premarket_preparation(stock_universe)
-
-# 2. View the Cached Watchlist Table anytime
-# view_watchlist()
-
-# 3. Run the 15-Minute Intraday Check (Market Hours Loop)
-# run_15min_intraday_monitor()
+if __name__ == "__main__":
+    mode = sys.argv[1] if len(sys.argv) > 1 else "monitor"
+    
+    # Target stock universe to scan
+    stock_universe = ["CUPID.NS", "SCHNEIDER.NS", "MAZDOCK.NS", "COCHINSHIP.NS", "HAL.NS", "BEL.NS", "TITAN.NS"]
+    
+    if mode == "premarket":
+        run_premarket(stock_universe)
+    elif mode == "monitor":
+        run_monitor()
