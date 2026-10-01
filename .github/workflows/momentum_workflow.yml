@@ -35,9 +35,9 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # Use 10# to force base-10 arithmetic and avoid leading zero octal errors
-          CURRENT_HOUR=\(((10#\)(date -u +%H)))
-          CURRENT_MIN=\(((10#\)(date -u +%M)))
+          # %-H and %-M automatically remove leading zeros (e.g., 8 instead of 08)
+          CURRENT_HOUR=$(date -u +%-H)
+          CURRENT_MIN=$(date -u +%-M)
           
           echo "Current UTC Time: Hour \(CURRENT_HOUR, Minute\)CURRENT_MIN"
           
